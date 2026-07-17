@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from usage_overlay.i18n import text
-from usage_overlay.panel import PANEL_HEIGHT, PANEL_WIDTH, SESSION_ROW_Y, TOOLTIP_BG, TOOLTIP_RESET_HIGHLIGHT, TOOLTIP_TEXT, USAGE_HEADER_LINE_HEIGHT, USAGE_HEADER_LINE_GAP, VERIFIED_LABEL_Y, WEEKLY_ROW_Y, badge_text, format_post_time, full_post_text, notice_empty_state_bounds, notice_empty_state_placement, reset_spans, tooltip_content_size
+from usage_overlay.panel import PANEL_CLOSE_ON_FOCUS_LOSS, PANEL_HEIGHT, PANEL_WIDTH, SESSION_ROW_Y, TOOLTIP_BG, TOOLTIP_RESET_HIGHLIGHT, TOOLTIP_TEXT, USAGE_HEADER_LINE_HEIGHT, USAGE_HEADER_LINE_GAP, VERIFIED_LABEL_Y, WEEKLY_ROW_Y, badge_text, format_post_time, full_post_text, notice_empty_state_bounds, notice_empty_state_placement, reset_spans, tooltip_content_size
 from usage_overlay.reset_feed import ResetPost
 from usage_overlay.config import ConfigStore
 from usage_overlay.panel import PanelController
@@ -35,6 +35,10 @@ def test_message_context_menu_has_localized_label() -> None:
 def test_usage_header_uses_compact_non_overlapping_line_boxes() -> None:
     assert USAGE_HEADER_LINE_HEIGHT == 26
     assert USAGE_HEADER_LINE_GAP == -4
+
+
+def test_non_topmost_panel_does_not_auto_close_on_focus_loss():
+    assert PANEL_CLOSE_ON_FOCUS_LOSS is False
 
 
 def test_verified_time_sits_below_the_logo_and_usage_rows_move_down() -> None:

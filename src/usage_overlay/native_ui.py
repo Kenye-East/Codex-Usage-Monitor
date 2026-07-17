@@ -27,11 +27,14 @@ WM_TIMER = 0x0113
 WM_LANGUAGE_CHANGED, WM_SETTINGS_CHANGED, WM_MENU_ACTION = WM_APP + 3, WM_APP + 4, WM_APP + 5
 WM_PROVIDER_DATA_READY = WM_APP + 6
 WM_UNREAD_CHANGED = WM_APP + 7
-WS_POPUP, WS_VISIBLE = 0x80000000, 0x10000000
+WS_POPUP, WS_VISIBLE, WS_CHILD = 0x80000000, 0x10000000, 0x40000000
 WS_EX_TOPMOST, WS_EX_TOOLWINDOW, WS_EX_LAYERED = 0x00000008, 0x00000080, 0x00080000
-GWL_HWNDPARENT, HWND_TOPMOST = -8, -1
+HWND_TOP = 0
+COMPACT_EX_STYLE = WS_EX_LAYERED
+COMPACT_WINDOW_STYLE = WS_CHILD | WS_VISIBLE
+COMPACT_Z_ORDER = HWND_TOP
 SW_SHOW = 5
-SWP_NOSIZE, SWP_NOZORDER = 0x0001, 0x0004
+SWP_NOSIZE, SWP_NOACTIVATE = 0x0001, 0x0010
 ULW_ALPHA, AC_SRC_OVER, AC_SRC_ALPHA, BI_RGB = 2, 0, 1, 0
 SMOOTHING_MODE_ANTIALIAS, INTERPOLATION_MODE_HIGH_QUALITY_BICUBIC, PIXEL_OFFSET_MODE_HALF = 4, 7, 4
 PIXEL_FORMAT_32BPP_PARGB = 0x000E200B
@@ -81,6 +84,15 @@ def clamp_taskbar_x(x: int, taskbar_width: int, overlay_width: int = WIDTH) -> i
     return min(max(8, x), max(8, taskbar_width - overlay_width - 8))
 
 
+def taskbar_child_y(taskbar_height: int, overlay_height: int = HEIGHT) -> int:
+    return max(0, (taskbar_height - overlay_height) // 2)
+
+
+def compact_layered_destination() -> None:
+    """Keep the taskbar child at the position assigned by SetWindowPos."""
+    return None
+
+
 def panel_origin(overlay_x: int, overlay_y: int, compact_width: int = WIDTH, panel_width: int = PANEL_WIDTH, panel_height: int = PANEL_HEIGHT) -> tuple[int, int]:
     return max(8, overlay_x + compact_width - panel_width), max(8, overlay_y - panel_height - 8)
 
@@ -97,6 +109,7 @@ class NativeOverlay:
         self.height = HEIGHT
         self._drag_client_x: int | None = None
         self._drag_start_taskbar_x = 0
+        self._drag_taskbar_left = 0
         self._drag_taskbar_width = 0
         self._dragging = False
         self._refreshing = False
@@ -147,17 +160,13 @@ class NativeOverlay:
         if x != self.config.taskbar_x:
             self.config = replace(self.config, taskbar_x=x)
             self.store.save(self.config)
-        y = taskbar_rect.top + max(0, (taskbar_height - self.height) // 2)
+        y = taskbar_child_y(taskbar_height, self.height)
         self.hwnd = ctypes.windll.user32.CreateWindowExW(
-            WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED, klass.lpszClassName, "", WS_POPUP | WS_VISIBLE,
-            x, y, WIDTH, self.height, None, None, hinstance, None)
+            COMPACT_EX_STYLE, klass.lpszClassName, "", COMPACT_WINDOW_STYLE,
+            x, y, WIDTH, self.height, taskbar, None, hinstance, None)
         if not self.hwnd:
             raise ctypes.WinError()
-        setter = ctypes.windll.user32.SetWindowLongPtrW
-        setter.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
-        setter.restype = ctypes.c_void_p
-        setter(self.hwnd, GWL_HWNDPARENT, taskbar)
-        ctypes.windll.user32.SetWindowPos(self.hwnd, HWND_TOPMOST, x, y, WIDTH, self.height, 0x0040)
+        ctypes.windll.user32.SetWindowPos(self.hwnd, COMPACT_Z_ORDER, x, y, WIDTH, self.height, 0x0040)
         ctypes.windll.user32.ShowWindow(self.hwnd, SW_SHOW)
         self._render_compact()
         self.panel.load_startup_notices()
@@ -290,14 +299,11 @@ class NativeOverlay:
 
             self._raise_zero_alpha_floor(bits_ptr, width * height)
 
-            rect = RECT()
-            ctypes.windll.user32.GetWindowRect(self.hwnd, ctypes.byref(rect))
-            dst_pt = POINT(rect.left, rect.top)
             src_pt = POINT(0, 0)
             size = SIZE(width, height)
             blend = BLENDFUNCTION(AC_SRC_OVER, 0, 255, AC_SRC_ALPHA)
             ctypes.windll.user32.UpdateLayeredWindow(
-                self.hwnd, screen_dc, ctypes.byref(dst_pt), ctypes.byref(size),
+                self.hwnd, screen_dc, compact_layered_destination(), ctypes.byref(size),
                 mem_dc, ctypes.byref(src_pt), 0, ctypes.byref(blend), ULW_ALPHA)
         finally:
             ctypes.windll.gdi32.SelectObject(mem_dc, old_bitmap)
@@ -422,13 +428,14 @@ class NativeOverlay:
             rect = RECT()
             taskbar = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
             ctypes.windll.user32.GetWindowRect(taskbar, ctypes.byref(rect))
+            self._drag_taskbar_left = rect.left
             self._drag_taskbar_width = rect.right - rect.left
             ctypes.windll.user32.SetCapture(hwnd)
             return 0
         if message == WM_MOUSEMOVE and self._drag_client_x is not None:
             cursor = POINT()
             ctypes.windll.user32.GetCursorPos(ctypes.byref(cursor))
-            candidate_x = cursor.x - self._drag_client_x
+            candidate_x = cursor.x - self._drag_taskbar_left - self._drag_client_x
             if not self._dragging and abs(candidate_x - self._drag_start_taskbar_x) < DRAG_THRESHOLD:
                 return 0
             self._dragging = True
@@ -438,8 +445,8 @@ class NativeOverlay:
             taskbar = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
             rect = RECT()
             ctypes.windll.user32.GetWindowRect(taskbar, ctypes.byref(rect))
-            y = rect.top + max(0, (rect.bottom - rect.top - self.height) // 2)
-            ctypes.windll.user32.SetWindowPos(hwnd, HWND_TOPMOST, new_x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER)
+            y = taskbar_child_y(rect.bottom - rect.top, self.height)
+            ctypes.windll.user32.SetWindowPos(hwnd, COMPACT_Z_ORDER, new_x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE)
             return 0
         if message == WM_LBUTTONUP:
             was_dragging = self._dragging

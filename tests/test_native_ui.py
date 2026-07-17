@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 
 from usage_overlay.models import ProviderResult, WindowUsage
-from usage_overlay.native_ui import MENU_ACTION_CODES, NATIVE_MENU_IDS, clamp_taskbar_x, compact_lines, native_menu_items, panel_origin
+from usage_overlay.native_ui import COMPACT_EX_STYLE, COMPACT_WINDOW_STYLE, COMPACT_Z_ORDER, HWND_TOP, MENU_ACTION_CODES, NATIVE_MENU_IDS, WS_CHILD, WS_EX_TOPMOST, WS_POPUP, compact_layered_destination, clamp_taskbar_x, compact_lines, native_menu_items, panel_origin, taskbar_child_y
 from usage_overlay.native_ui import NativeOverlay
+from usage_overlay.panel import PANEL_TOPMOST
 
 
 def test_compact_lines_show_remaining_usage_not_used_usage():
@@ -21,6 +22,22 @@ def test_expanded_panel_is_anchored_above_compact_taskbar_strip():
 
 def test_native_overlay_has_no_provider_switching_entrypoint():
     assert not hasattr(NativeOverlay, "_switch_provider")
+
+
+def test_compact_overlay_is_a_non_topmost_taskbar_child_window():
+    assert COMPACT_EX_STYLE & WS_EX_TOPMOST == 0
+    assert COMPACT_WINDOW_STYLE & WS_CHILD == WS_CHILD
+    assert COMPACT_WINDOW_STYLE & WS_POPUP == 0
+    assert COMPACT_Z_ORDER == HWND_TOP
+    assert PANEL_TOPMOST is False
+
+
+def test_compact_overlay_uses_taskbar_relative_vertical_coordinates():
+    assert taskbar_child_y(taskbar_height=48, overlay_height=40) == 4
+
+
+def test_taskbar_child_layered_render_keeps_its_existing_position():
+    assert compact_layered_destination() is None
 
 
 def test_native_menu_maps_messages_to_its_own_action_code():

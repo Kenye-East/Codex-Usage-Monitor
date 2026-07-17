@@ -23,6 +23,8 @@ from usage_overlay.reset_feed import NitterResetFeed, ResetPost, unread_posts
 from usage_overlay.windows import set_launch_at_login
 
 PANEL_WIDTH, PANEL_HEIGHT = 300, 280
+PANEL_TOPMOST = False
+PANEL_CLOSE_ON_FOCUS_LOSS = False
 # The 18px Segoe UI glyph box needs 26px for descenders (e.g. "g").  The
 # slight widget overlap is transparent; the visible text baselines stay tight.
 USAGE_HEADER_LINE_HEIGHT, USAGE_HEADER_LINE_GAP = 26, -4
@@ -313,7 +315,7 @@ class PanelApp(ctk.CTk):
         self._codex_image = ctk.CTkImage(Image.open(asset_path(icon_name())), size=(32, 32))
 
         self.overrideredirect(True)
-        self.attributes("-topmost", True)
+        self.attributes("-topmost", PANEL_TOPMOST)
         self.attributes("-alpha", 0.0)
         self.attributes("-transparentcolor", TRANSPARENT_KEY)
         self.configure(fg_color=CREAM_BG)
@@ -361,10 +363,8 @@ class PanelApp(ctk.CTk):
         self.set_unread_count(controller.unread_count)
 
     def _on_focus_out(self, _event) -> None:
-        # Clicking a non-focusable child (e.g. the toggle track) can blip the toplevel's own
-        # focus without the user actually leaving the app, so check after the fact whether
-        # focus really left our window instead of closing on every FocusOut unconditionally.
-        self.after(60, self._maybe_close_on_focus_loss)
+        if PANEL_CLOSE_ON_FOCUS_LOSS:
+            self.after(60, self._maybe_close_on_focus_loss)
 
     def _maybe_close_on_focus_loss(self) -> None:
         if self.focus_get() is None and self.winfo_viewable():
