@@ -24,7 +24,7 @@ from usage_overlay.windows import set_launch_at_login
 
 PANEL_WIDTH, PANEL_HEIGHT = 300, 280
 PANEL_TOPMOST = False
-PANEL_CLOSE_ON_FOCUS_LOSS = False
+PANEL_CLOSE_ON_FOCUS_LOSS = True
 # The 18px Segoe UI glyph box needs 26px for descenders (e.g. "g").  The
 # slight widget overlap is transparent; the visible text baselines stay tight.
 USAGE_HEADER_LINE_HEIGHT, USAGE_HEADER_LINE_GAP = 26, -4

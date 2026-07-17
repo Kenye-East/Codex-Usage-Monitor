@@ -37,8 +37,8 @@ def test_usage_header_uses_compact_non_overlapping_line_boxes() -> None:
     assert USAGE_HEADER_LINE_GAP == -4
 
 
-def test_non_topmost_panel_does_not_auto_close_on_focus_loss():
-    assert PANEL_CLOSE_ON_FOCUS_LOSS is False
+def test_non_topmost_panel_closes_when_focus_moves_outside_it():
+    assert PANEL_CLOSE_ON_FOCUS_LOSS is True
 
 
 def test_verified_time_sits_below_the_logo_and_usage_rows_move_down() -> None:
